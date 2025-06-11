@@ -7,8 +7,20 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.example.car_sensor.utils.SSLSocketProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import javax.net.ssl.*;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.security.KeyManagementException;
+import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 
 @Component
 @Slf4j
@@ -28,13 +40,27 @@ public class CarSensor {
     private MqttConnectOptions options;
 
     @PostConstruct
-    public void startUp() {
+    public void startUp() throws NoSuchAlgorithmException, KeyManagementException {
         try{
             client = new MqttClient(brokerUrl, clientId);
 
             options = new MqttConnectOptions();
             options.setUserName(username);
             options.setPassword(password.toCharArray());
+
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                    new X509TrustManager() {
+                        public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+                        public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+                        public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                    }
+            };
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new SecureRandom());
+
+
+            MqttConnectOptions options = new MqttConnectOptions();
+            options.setSocketFactory(sslContext.getSocketFactory());
 
             client.connect(options);
             log.info("Connected to broker");
@@ -66,9 +92,7 @@ public class CarSensor {
                 }
             });
 
-            //publish retained message to indicate online status
             publishOnlineNetworkStatus();
-            //subscribe to topics
 
             client.subscribe("car/commands", 0);
         } catch (MqttException e) {

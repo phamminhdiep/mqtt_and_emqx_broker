@@ -10,6 +10,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
+
 @Component
 @Slf4j
 @RequiredArgsConstructor
@@ -28,7 +36,7 @@ public class MobileDevice {
     private MqttConnectOptions options;
 
     @PostConstruct
-    public void startUp(){
+    public void startUp() throws NoSuchAlgorithmException, KeyManagementException {
         try{
             client = new MqttClient(brokerUrl, clientId);
             client.setCallback(new MqttCallback() {
@@ -63,6 +71,20 @@ public class MobileDevice {
             options.setAutomaticReconnect(false);
             options.setUserName(username);
             options.setPassword(password.toCharArray());
+
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                    new X509TrustManager() {
+                        public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+                        public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+                        public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                    }
+            };
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new SecureRandom());
+
+
+            MqttConnectOptions options = new MqttConnectOptions();
+            options.setSocketFactory(sslContext.getSocketFactory());
 
             client.connect(options);
             log.info("Connected to broker");
